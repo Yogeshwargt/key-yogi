@@ -1,0 +1,13 @@
+** Infinispan cluster is being deployed! **
+
+-------------------------------------------------------------------------------
+
+To access Infinspan within the Kubernetes cluster:
+
+- Use HTTP REST endpoint:
+  *) Insert Data:
+     $ kubectl exec -it {{ include "infinispan.fullname" . }}-0 -- curl -v -X POST -u {{ .Values.application.user }}:{{ .Values.application.password }} -H "Content-Type: text/plain" -d "bar" http://{{ include "infinispan.fullname" . }}-{{ .Values.service.http.name }}.{{ .Release.Namespace }}.svc.cluster.local:8080/rest/default/foo
+  *) Get Data:
+     $ kubectl exec -it {{ include "infinispan.fullname" . }}-1 -- curl -v -u {{ .Values.application.user }}:{{ .Values.application.password }} http://{{ include "infinispan.fullname" . }}-{{ .Values.service.http.name }}.{{ .Release.Namespace }}.svc.cluster.local:8080/rest/default/foo
+
+-------------------------------------------------------------------------------

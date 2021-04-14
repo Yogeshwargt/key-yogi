@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "infinispan.fullname" . }}
+  labels:
+    {{- if (.Values.application.debug) }}
+    app: infinispan-pod
+    {{- end }}
+spec:
+  serviceName: "infinispan"
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: infinispan-pod
+  template:
+    metadata:
+      labels:
+        app: infinispan-pod
+    spec:
+      containers:
+
+        - env:
+          # - name: CONFIG_PATH
+          #   value: /etc/config/infinispan.yaml
+          - name: MANAGED_ENV
+            value: "TRUE"
+          - name: JAVA_OPTIONS
+            value: '-Xmx200M -Xms200M -XX:MaxRAM=420M -Dsun.zip.disableMemoryMapping=true
+              -XX:+UseSerialGC -XX:MinHeapFreeRatio=5 -XX:MaxHeapFreeRatio=10 '
+          - name: DEFAULT_IMAGE
+            value: quay.io/infinispan/server:12.0
+          - name: ADMIN_IDENTITIES_PATH
+            value: /etc/security/admin/identities.yaml
+          - name: IDENTITIES_PATH
+            value: /etc/security/user/identities.yaml
+          - name: CONFIG_HASH
+            value: 8a662d6969a73956b1c5e386af3d811cf2daf44c
+          - name: ADMIN_IDENTITIES_HASH
+            value: 9b104247386c5c58f863d05afa57237510a69e60
+          - name: IDENTITIES_HASH
+            value: 778c3af5b16fcca5ab53fbf5153d4069ddc254b1          
+          - name: KUBERNETES_LABELS
+            value: app.kubernetes.io/instance={{ .Release.Name }}
+          - name: KUBERNETES_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: APP_USER
+            valueFrom:
+              secretKeyRef:
+                key: application-user
+                name: {{ include "infinispan.fullname" . }}
+          - name: APP_PASS
+            valueFrom:
+              secretKeyRef:
+                key: application-password
+                name: {{ include "infinispan.fullname" . }}   
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["/opt/infinispan/bin/server.sh"]
+          args: ["-c", "/opt/infinispan/server/conf/clustered.xml"]
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: rest/v2/cache-managers/default/health/status
+              port: 11222
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 80
+          name: {{ .Release.Name }}
+          ports:
+          - containerPort: 11223
+            name: infinispan-adm
+            protocol: TCP
+          - containerPort: 7800
+            name: ping
+            protocol: TCP
+          - containerPort: 11222
+            name: infinispan
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: rest/v2/cache-managers/default/health/status
+              port: 11222
+              scheme: HTTP
+            failureThreshold: 5
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 80
+          volumeMounts:
+            - name: config-volume
+              mountPath: /opt/infinispan/server/conf/clustered.xml
+              subPath: clustered.xml
+            # - mountPath: /etc/config
+            #   name: config-volume
+            - mountPath: /opt/infinispan/server/data
+              name: data-volume
+            - mountPath: /etc/security/admin
+              name: admin-identities-volume
+            - mountPath: /etc/security/user
+              name: identities-volume
+          # startupProbe:
+          #   failureThreshold: 60
+          #   httpGet:
+          #     path: rest/v2/cache-managers/default/health/status
+          #     port: 11223
+          #     scheme: HTTP          
+          resources:
+  {{ toYaml .Values.resources | indent 12 }}
+      terminationGracePeriodSeconds: 120
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: data-volume-infinispan-0
+        - name: config-volume
+          configMap:
+            name: "clustered-configmap"
+        # - configMap:
+        #     defaultMode: 420
+        #     name: infinispan-configuration
+        #   name: config-volume
+        - name: admin-identities-volume
+          secret:
+            defaultMode: 420
+            secretName: infinispan-generated-operator-secret
+        - name: identities-volume
+          secret:
+            defaultMode: 420
+            secretName: infinispan-generated-secret
