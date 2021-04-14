@@ -20,7 +20,7 @@ application: {}
 service:
   hotrod:
     name: hotrod
-    type: ClusterIP
+    type: LoadBalancer
     port: 11222
   http:
     name: http
